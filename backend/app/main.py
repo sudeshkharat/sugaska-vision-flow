@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
     await _purge_stale_tasks()
     yield
 
-app = FastAPI(title="AI Vision Platform", lifespan=lifespan)
+app = FastAPI(title="Sugaska Vision Flow", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

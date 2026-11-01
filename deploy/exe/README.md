@@ -1,4 +1,4 @@
-# AI Vision Platform — Windows EXE Deployment
+# Sugaska Vision Flow — Windows EXE Deployment
 
 Run the entire platform as a standalone Windows application — no Docker, no
 manual service setup.

@@ -1,7 +1,7 @@
 """
 table_creation.py
 ~~~~~~~~~~~~~~~~~
-SQLAlchemy **Core** table definitions for the AI Vision Platform.
+SQLAlchemy **Core** table definitions for the Sugaska Vision Flow.
 
 Why Core instead of ORM declarative?
 --------------------------------------

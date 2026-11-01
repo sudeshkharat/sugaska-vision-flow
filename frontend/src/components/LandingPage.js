@@ -93,7 +93,7 @@ const LandingPage = ({ onLogin, onGetStarted }) => {
                 <div className="lnd-nav-inner">
                     <div className="lnd-brand">
                         <img src={logoImg} alt="Logo" style={{ height: 20, width: 'auto', objectFit: 'contain' }} />
-                        <span className="lnd-brand-text">AI Vision Platform</span>
+                        <span className="lnd-brand-text">Sugaska Vision Flow</span>
                     </div>
                     <div className="lnd-nav-links">
                         <a href="#features" className="lnd-nav-link">Features</a>
@@ -148,7 +148,7 @@ const LandingPage = ({ onLogin, onGetStarted }) => {
                                 <div className="lnd-mockup-dots">
                                     <span /><span /><span />
                                 </div>
-                                <span className="lnd-mockup-title">AI Vision Platform — Project Alpha</span>
+                                <span className="lnd-mockup-title">Sugaska Vision Flow — Project Alpha</span>
                                 <span className="lnd-mockup-nav">← All Projects</span>
                             </div>
                             <div className="lnd-mockup-body">
@@ -312,7 +312,7 @@ const LandingPage = ({ onLogin, onGetStarted }) => {
                 <div className="lnd-footer-inner">
                     <div className="lnd-brand lnd-brand--footer">
                         <span className="lnd-brand-icon"><Eye size={18} /></span>
-                        <span className="lnd-brand-text">AI Vision Platform</span>
+                        <span className="lnd-brand-text">Sugaska Vision Flow</span>
                     </div>
                     <p className="lnd-footer-copy">
                         Built for computer vision engineers. Runs locally. Your data, your models.

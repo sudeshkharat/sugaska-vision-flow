@@ -1,5 +1,5 @@
 """
-AI Vision Platform — Windows EXE Launcher
+Sugaska Vision Flow — Windows EXE Launcher
 ==========================================
 Starts all required services in order:
   1. Verify CUDA / GPU
@@ -112,7 +112,7 @@ def wait_for_backend(port: int, timeout: int = 120) -> bool:
 # ---------------------------------------------------------------------------
 def main() -> None:
     print("=" * 60)
-    print("  AI Vision Platform — Starting up")
+    print("  Sugaska Vision Flow — Starting up")
     print("=" * 60)
 
     cfg = load_config()
@@ -197,7 +197,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     app_url = f"http://127.0.0.1:{api_port}"
     print("\n" + "=" * 60)
-    print("  AI Vision Platform is RUNNING")
+    print("  Sugaska Vision Flow is RUNNING")
     print(f"  Open your browser at: {app_url}")
     print("  Press Ctrl+C to stop all services and exit.")
     print("=" * 60 + "\n")

@@ -1,5 +1,5 @@
 -- =============================================================================
--- AI Vision Platform — PostgreSQL Initialisation Script
+-- Sugaska Vision Flow — PostgreSQL Initialisation Script
 -- Runs once on first container start (docker-entrypoint-initdb.d).
 -- The database itself is created automatically by the Postgres Docker image
 -- using the POSTGRES_DB environment variable.

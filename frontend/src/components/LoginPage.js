@@ -4,7 +4,8 @@ import './LoginPage.css';
 
 import { API_URL } from '../config';
 import { Eye, EyeOff, ArrowRight, Zap, Target, Pencil, Rocket, AlertTriangle } from 'lucide-react';
-import logoImg from '../logo.png';
+import logoLight from '../assets/brand/logo-light.png';
+import logoDark from '../assets/brand/logo-dark.png';
 
 // ── Left panel feature list ──────────────────────────────────────
 const FEATURES = [
@@ -29,7 +30,7 @@ const LeftPanel = () => (
             {/* Brand */}
             <div className="lp2-brand">
                 <span className="lp2-brand-icon"><Eye size={22} /></span>
-                <span className="lp2-brand-name">AI Vision Platform</span>
+                <span className="lp2-brand-name">Sugaska Vision Flow</span>
             </div>
 
             {/* Headline */}
@@ -148,7 +149,8 @@ const LoginPage = ({ defaultTab = 'login', onSuccess, onBack }) => {
 
                 {/* Logo top-right */}
                 <div className="lp2-logo">
-                    <img src={logoImg} alt="Logo" style={{ height: 36, width: 'auto', objectFit: 'contain' }} />
+                    <img src={logoLight} alt="Sugaska" className="lp2-logo-img lp2-logo-img--light" />
+                    <img src={logoDark} alt="Sugaska" className="lp2-logo-img lp2-logo-img--dark" />
                 </div>
 
                 <div className="lp2-form-wrap">

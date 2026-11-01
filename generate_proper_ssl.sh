@@ -4,9 +4,9 @@
 # Generates Nginx-compatible SSL files ensuring proper formatting (newlines).
 
 # Directories
-SOURCE_DIR="/home/user/ai-vision-platform/certificate/ssl"
-DEST_DIR="/home/user/ai-vision-platform/ssl"
-BACKUP_DIR="/home/user/ai-vision-platform/ssl_backup_$(date +%Y%m%d_%H%M%S)"
+SOURCE_DIR="/home/user/sugaska-vision-flow/certificate/ssl"
+DEST_DIR="/home/user/sugaska-vision-flow/ssl"
+BACKUP_DIR="/home/user/sugaska-vision-flow/ssl_backup_$(date +%Y%m%d_%H%M%S)"
 
 # Files
 SERVER_CERT="$SOURCE_DIR/example.com.cer"

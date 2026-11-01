@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 #
-# PyInstaller spec for AI Vision Platform Windows EXE
+# PyInstaller spec for Sugaska Vision Flow Windows EXE
 #
 # Build with:   pyinstaller launcher.spec
 # Output:       dist/AIVision/aivision.exe
@@ -17,7 +17,7 @@ import sysconfig
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-REPO_ROOT = Path(SPECPATH).parent.parent        # ai-vision-platform/
+REPO_ROOT = Path(SPECPATH).parent.parent        # sugaska-vision-flow/
 BACKEND   = REPO_ROOT / "backend"
 FRONTEND  = REPO_ROOT / "frontend" / "build"
 RESOURCES = Path(SPECPATH) / "resources"

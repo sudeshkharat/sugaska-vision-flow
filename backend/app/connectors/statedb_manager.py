@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 class StateDBManager:
     """
     Manages the full lifecycle of the PostgreSQL database used by the
-    AI Vision Platform.
+    Sugaska Vision Flow.
 
     Parameters
     ----------

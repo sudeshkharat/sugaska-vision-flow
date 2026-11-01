@@ -1,4 +1,4 @@
-# Next steps -- ai-vision-platform (training side)
+# Next steps -- sugaska-vision-flow (training side)
 
 Branch: `claude/exe-update-data-safety-plk61b`. App-side notes: `NEXT_STEPS.md` in the flutter-ai-platform repo
 (branch `claude/yolo26-end2end-decode`).

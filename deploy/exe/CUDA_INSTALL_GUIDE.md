@@ -1,6 +1,6 @@
 # NVIDIA Driver & CUDA Toolkit — Windows Installation Guide
 
-This guide is for users running **AI Vision Platform** on Windows who want
+This guide is for users running **Sugaska Vision Flow** on Windows who want
 GPU-accelerated inference and training.
 
 > **Skip this guide** if you do not have an NVIDIA GPU — the application runs

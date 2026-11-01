@@ -24,7 +24,7 @@ from ..schemas.base import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # ── Config ─────────────────────────────────────────────────────────
-SECRET_KEY = "ai-vision-platform-secret-2026-change-in-production"
+SECRET_KEY = "sugaska-vision-flow-secret-2026-change-in-production"
 ALGORITHM  = "HS256"
 TOKEN_EXPIRE_DAYS = 30  # long-lived for convenience
 

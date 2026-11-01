@@ -1,6 +1,6 @@
 {
-  "short_name": "AI Vision",
-  "name": "AI Vision Platform",
+  "short_name": "Sugaska",
+  "name": "Sugaska Vision Flow",
   "description": "Annotate images, train YOLO models, and deploy computer-vision pipelines.",
   "icons": [
     {
@@ -27,6 +27,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#6366f1",
-  "background_color": "#07091c"
+  "theme_color": "#0B0B0D",
+  "background_color": "#0B0B0D"
 }

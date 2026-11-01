@@ -1,5 +1,5 @@
 """
-Active Learning module for AI Vision Platform.
+Active Learning module for Sugaska Vision Flow.
 
 Implements SOTA uncertainty-based query strategies to select the most
 informative images for human annotation, reducing hallucination by ensuring

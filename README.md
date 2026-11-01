@@ -1,11 +1,11 @@
-# AI Vision Platform
+# Sugaska Vision Flow
 
 An end-to-end computer vision platform for managing datasets, annotating images, and training YOLO models (v8 through v11). The platform features an automated "Seed & Scale" workflow to accelerate labeling through AI-assisted auto-annotation.
 
 ## Project Structure
 
 ```text
-ai-vision-platform/
+sugaska-vision-flow/
 ├── backend/                # FastAPI Application
 │   ├── app/
 │   │   ├── api/            # API Endpoints (Auth, Projects, Images, Pipeline)
@@ -100,7 +100,7 @@ huggingface-cli download google/siglip-so400m-patch14-384 --local-dir siglip-so4
 
 Ensure the directory structure looks like this:
 ```text
-ai-vision-platform/
+sugaska-vision-flow/
 └── datavision_hf_models/
     ├── grounding-dino-base/
     ├── sam2-hiera-large/

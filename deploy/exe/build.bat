@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 
 echo ============================================================
-echo  AI Vision Platform - Windows EXE Build Script
+echo  Sugaska Vision Flow - Windows EXE Build Script
 echo ============================================================
 
 :: Resolve repo root (two levels up from deploy\exe)
