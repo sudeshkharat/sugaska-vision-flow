@@ -1,0 +1,268 @@
+"""
+sequence_match.py
+~~~~~~~~~~~~~~~~~~
+Shared step-evaluation logic for both the video state machine
+(sequence_engine.py) and the single-image tester (sequence_test.py), so
+their matching rules never drift apart.
+
+Implements the spec's intersection formula exactly:
+
+    Intersection % = Intersection Area / Target Area x 100
+
+using real polygon-vs-polygon pixel intersection (rasterized), not just
+bounding-box overlap — segmentation masks are compared as actual masks.
+
+Two step target types:
+  - "region": Target = a user-drawn region (box, treated as a 4-point
+    polygon). Object = a detected class's mask (its real predicted mask
+    if the model produced one, else its bbox corners as a fallback
+    polygon when only a plain detector, not a segmenter, saw it).
+  - "detection_class": Target = another detected class's OWN mask (e.g.
+    "M"'s predicted mask). Object = the intersection class's mask (e.g.
+    "fingertip"). Neither polygon is drawn by the user — both come from
+    the model's own predictions this frame.
+
+Line regions are NOT handled here — a line crossing needs motion between
+frames, which is state sequence_engine.py already tracks separately.
+"""
+
+from __future__ import annotations
+
+
+# What overlap_threshold is measured as a fraction OF when a step doesn't
+# say (see mask_intersection_percent). "object" — how much of the DETECTED
+# OBJECT is inside the region — is the default because the alternative,
+# "region", is unusable unless every region happens to be drawn tightly
+# around the object: a hand fully inside a box ~3x its size scores ~15%
+# there, so no threshold setting can make it pass. Steps saved before
+# overlap_basis existed carry no value and so get this too, which changes
+# their behavior — deliberately, since that is the broken case.
+DEFAULT_OVERLAP_BASIS = "object"
+
+
+def bbox_to_polygon(xyxy: tuple[float, float, float, float]) -> list[list[float]]:
+    x1, y1, x2, y2 = xyxy
+    return [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+
+
+# Half-width (normalized 0-1) of the thin rectangle a line region is
+# buffered into for area-overlap matching — a true zero-width line has no
+# area, so "Intersection Area / Target Area" needs a strip to compare
+# against, not a geometric line.
+LINE_OVERLAP_HALF_WIDTH = 0.02
+
+
+def line_to_polygon(x1: float, y1: float, x2: float, y2: float,
+                     half_width: float = LINE_OVERLAP_HALF_WIDTH) -> list[list[float]]:
+    """Buffer a line segment into a thin rectangle (quad) so it can be
+    matched with the same pixel-intersection formula a box region uses."""
+    dx, dy = x2 - x1, y2 - y1
+    length = (dx * dx + dy * dy) ** 0.5
+    if length < 1e-6:
+        # Degenerate (zero-length) line — fall back to a small square
+        # around the single point so the polygon still has real area.
+        return [
+            [x1 - half_width, y1 - half_width], [x1 + half_width, y1 - half_width],
+            [x1 + half_width, y1 + half_width], [x1 - half_width, y1 + half_width],
+        ]
+    nx, ny = -dy / length * half_width, dx / length * half_width
+    return [
+        [x1 + nx, y1 + ny], [x2 + nx, y2 + ny],
+        [x2 - nx, y2 - ny], [x1 - nx, y1 - ny],
+    ]
+
+
+def mask_intersection_percent(target_polygon: list[list[float]],
+                               other_polygon: list[list[float]],
+                               resolution: int = 256,
+                               basis: str = "region") -> float:
+    """Real pixel-level intersection between two normalized (0-1) polygons,
+    rasterized on a resolution x resolution canvas so arbitrary — including
+    concave — mask shapes are handled correctly, not just axis-aligned boxes.
+
+    basis picks WHAT the intersection is measured as a fraction OF:
+
+    * "region" (default, the original spec formula):
+          Intersection Area / TARGET REGION Area x 100
+      i.e. "how much of the drawn region is covered by the object". A
+      region drawn much larger than the object can never score high on
+      this no matter how squarely the object sits inside it — a hand
+      fully inside an oversized box might only cover 30% of that box.
+
+    * "object":
+          Intersection Area / OBJECT Area x 100
+      i.e. "how much of the detected object is inside the drawn region",
+      which is what "my hand is in the box" intuitively means. A hand
+      entirely inside the region scores 100% regardless of how much
+      empty space the region has around it.
+    """
+    import cv2
+    import numpy as np
+
+    def to_px(poly):
+        return np.array(
+            [[int(round(x * resolution)), int(round(y * resolution))] for x, y in poly],
+            dtype=np.int32,
+        )
+
+    target_mask = np.zeros((resolution, resolution), dtype=np.uint8)
+    other_mask = np.zeros((resolution, resolution), dtype=np.uint8)
+    cv2.fillPoly(target_mask, [to_px(target_polygon)], 1)
+    cv2.fillPoly(other_mask, [to_px(other_polygon)], 1)
+
+    denominator = int(other_mask.sum()) if basis == "object" else int(target_mask.sum())
+    if denominator == 0:
+        return 0.0
+    intersection_area = int(np.logical_and(target_mask, other_mask).sum())
+    return (intersection_area / denominator) * 100.0
+
+
+def best_polygon_for_class(detections: list[dict], class_name: str) -> list[list[float]] | None:
+    """Highest-confidence detection of this class this frame, as a polygon —
+    its real segmentation mask if the model produced one, else its bbox
+    corners (so a plain box-only detector still degrades gracefully).
+
+    Only for picking a "detection_class" step's TARGET area, where there is
+    no region to compare against yet. To decide whether a required class
+    is inside a region, use best_overlap_for_class instead — see why there.
+    """
+    best, best_conf = None, -1.0
+    for det in detections:
+        if det["class_name"] != class_name:
+            continue
+        conf = det.get("conf", 0.0)
+        if conf > best_conf:
+            best_conf = conf
+            best = det.get("mask") or bbox_to_polygon(det["xyxy"])
+    return best
+
+
+def best_overlap_for_class(detections: list[dict], class_name: str,
+                            target_polygon: list[list[float]],
+                            basis: str = "region") -> float:
+    """Best overlap % against target_polygon across EVERY detection of this
+    class this frame — not just the single most confident one.
+
+    A frame routinely contains more than one detection of the same class:
+    genuinely (two hands both labelled "Lh" when the model confuses left
+    vs right) or spuriously (duplicate overlapping masks). Scoring only the
+    highest-confidence one then asks the wrong question — "is the model's
+    single favourite Lh in this region?" instead of "is ANY Lh in this
+    region?" — and a step fails while a perfectly good detection of the
+    required class sits squarely inside its region, simply because some
+    other instance elsewhere happened to score 0.01 higher.
+    """
+    best = 0.0
+    for det in detections:
+        if det["class_name"] != class_name:
+            continue
+        polygon = det.get("mask") or bbox_to_polygon(det["xyxy"])
+        pct = mask_intersection_percent(target_polygon, polygon, basis=basis)
+        if pct > best:
+            best = pct
+    return best
+
+
+def evaluate_step(step: dict, detections: list[dict], threshold_pct: float) -> dict:
+    """Evaluate one step's target against one frame's or image's
+    detections. threshold_pct is on a 0-100 scale.
+
+    Returns {matched, target_type, testable, per_class, note}.
+
+    target_type == "multi_region" is a combo step — 2+ independently
+    drawn regions (e.g. left hand on region A AND right hand on region B)
+    that must ALL match in the SAME frame, each evaluated as its own
+    single-region check via _match_single and ANDed together. Everything
+    else (a plain "region" or "detection_class" step) goes straight to
+    _match_single.
+    """
+    if step.get("target_type") == "multi_region":
+        sub_targets = step.get("sub_targets") or []
+        if not sub_targets:
+            return {
+                "matched": False, "target_type": "multi_region", "testable": True,
+                "per_class": [], "note": "Combo step has no sub-regions defined.",
+            }
+        # A combo step's own overlap_basis applies to every sub-region —
+        # sub-targets carry only geometry + classes, not match semantics.
+        basis = step.get("overlap_basis") or DEFAULT_OVERLAP_BASIS
+        results = [_match_single(sub, detections, threshold_pct, basis) for sub in sub_targets]
+        testable = all(r["testable"] for r in results)
+        notes = [r["note"] for r in results if r["note"]]
+        return {
+            "matched": testable and all(r["matched"] for r in results),
+            "target_type": "multi_region",
+            "testable": testable,
+            "per_class": [c for r in results for c in r["per_class"]],
+            "note": "; ".join(notes) if notes else None,
+        }
+    return _match_single(step, detections, threshold_pct, step.get("overlap_basis") or DEFAULT_OVERLAP_BASIS)
+
+
+def _match_single(step: dict, detections: list[dict], threshold_pct: float,
+                  basis: str = "region") -> dict:
+    """Evaluate one region/detection_class target (never multi_region —
+    that's unwrapped into these by evaluate_step above) against one
+    frame's or image's detections.
+
+    Only "region" (box) and "detection_class" targets are handled here —
+    a plain motion-crossing line region returns testable=False; the
+    caller should keep using the separate motion-crossing check for those.
+    """
+    target_type = step.get("target_type", "region")
+
+    if target_type == "detection_class":
+        target_class = step.get("target_class")
+        target_polygon = best_polygon_for_class(detections, target_class) if target_class else None
+        if target_polygon is None:
+            return {
+                "matched": False,
+                "target_type": target_type,
+                "testable": True,
+                "per_class": [],
+                "note": f'Target class "{target_class}" was not detected in this frame.',
+            }
+    else:
+        region_type = step.get("region_type")
+        if region_type == "box":
+            x1, y1, x2, y2 = step["region_coords"]
+            target_polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+        elif region_type == "polygon":
+            # A boundary frozen once from a class's own detected mask (see
+            # /sequences/freeze-class), so the step never needs that class
+            # detected live again — sidesteps a finger fully occluding the
+            # key it's pressing, which would otherwise erase its mask.
+            target_polygon = step["region_coords"]
+        elif region_type == "line" and step.get("trigger_mode") == "overlap":
+            # Opt-in: match this line region the same way a box is matched
+            # (area overlap %% against the shared threshold) instead of the
+            # default motion-crossing check, which needs two frames and so
+            # isn't usable here or in the single-image tester.
+            x1, y1, x2, y2 = step["region_coords"]
+            target_polygon = line_to_polygon(x1, y1, x2, y2)
+        else:
+            return {
+                "matched": False,
+                "target_type": target_type,
+                "testable": False,
+                "per_class": [],
+                "note": "Line regions need motion between frames — not evaluated here.",
+            }
+
+    needed = step.get("required_classes") or [step["required_class"]]
+    per_class = []
+    for cls in needed:
+        pct = best_overlap_for_class(detections, cls, target_polygon, basis)
+        per_class.append({
+            "class_name": cls,
+            "matched": pct >= threshold_pct,
+            "percent": round(pct, 1),
+        })
+
+    return {
+        "matched": bool(needed) and all(c["matched"] for c in per_class),
+        "target_type": target_type,
+        "testable": True,
+        "per_class": per_class,
+        "note": None,
+    }

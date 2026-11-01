@@ -1,0 +1,312 @@
+from pydantic import BaseModel, EmailStr, Field
+from typing import List, Optional, Dict, Union
+from datetime import datetime
+
+
+# ── Auth schemas ───────────────────────────────────────────────────
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str = Field(..., min_length=8, max_length=128)
+
+class UserLogin(BaseModel):
+    email: str
+    password: str = Field(..., min_length=8, max_length=128)
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class TokenResponse(BaseModel):
+    token: str
+    user: UserResponse
+
+class ProjectCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    classes: List[str]
+    project_type: str = "combined"  # detection | combined ("ocr" accepted for legacy clients, mapped to combined)
+
+class ProjectUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    classes: Optional[List[str]] = None
+    project_type: Optional[str] = None
+
+class ClassRenameRequest(BaseModel):
+    old_name: str
+    new_name: str
+
+class ProjectResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str]
+    classes: List[str]
+    project_type: str = "combined"
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ImageResponse(BaseModel):
+    id: str
+    project_id: str
+    filename: str
+    filepath: str
+    width: int
+    height: int
+    status: str
+    created_at: datetime
+    ann_shapes: dict[str, int] = {}   # annotations per shape: bbox / polygon / segment
+    ann_max_ratio: float = 0    # longest/shortest side of the most elongated rectangle (1 = square)
+    ann_odd: float = 1          # how far the most unusual box is from its class's usual width/height shape (1 = normal)
+    ann_count: int = 0          # number of annotations on the image (filled by the list endpoint)
+
+    class Config:
+        from_attributes = True
+
+class AnnotationCreate(BaseModel):
+    image_id: str
+    class_name: str
+    bbox: Optional[List[float]] = None
+    annotation_type: str = "bbox"  # "bbox" | "polygon"
+    points: Optional[List[List[float]]] = None  # normalized [[x,y], ...] for polygons
+    state: Optional[str] = None  # crop+classify state label (see Annotation.state)
+    source: str = "manual"
+
+class AnnotationResponse(BaseModel):
+    id: str
+    image_id: str
+    class_name: str
+    bbox: Optional[List[float]]
+    annotation_type: str = "bbox"
+    points: Optional[List[List[float]]] = None
+    state: Optional[str] = None
+    source: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Video schemas ───────────────────────────────────────────────────
+class VideoResponse(BaseModel):
+    id: str
+    project_id: str
+    original_filename: str
+    filepath: str
+    file_size: int
+    duration: Optional[float]
+    fps: Optional[float]
+    width: Optional[int]
+    height: Optional[int]
+    total_frames: Optional[int]
+    status: str
+    frames_extracted: int
+    task_id: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class VideoRotateRequest(BaseModel):
+    direction: str = Field(default="cw")  # "cw" | "ccw" | "180"
+
+
+class VideoFrameExtractionRequest(BaseModel):
+    # Extract 1 frame every `sample_every_n` frames (e.g. 30 = 1 fps at 30fps video)
+    sample_every_n: int = Field(default=30, ge=1, le=3000)
+    # Hard cap on total frames extracted (0 = no limit)
+    max_frames: int = Field(default=300, ge=0, le=10000)
+
+
+class VideoFrameCaptureRequest(BaseModel):
+    # Timestamp in seconds to seek to and save as a single Image row.
+    t: float = Field(default=0.0, ge=0.0)
+
+
+# ── Region sequence schemas ───────────────────────────────────────
+class SequenceSubTarget(BaseModel):
+    """One region within a "multi_region" combo step — same shape as a
+    plain region step's target fields, minus anything step-level
+    (label, complete_on, order_index live on the parent step, not here)."""
+    region_type: str  # "box" | "line" | "polygon"
+    region_coords: Union[List[float], List[List[float]]]
+    # Only meaningful when region_type == "line" — combo sub-regions only
+    # support "overlap" (no motion-crossing inside a combo: crossing state
+    # is tracked per class, and the same class could appear in more than
+    # one sub-region of the same combo, which would corrupt it).
+    trigger_mode: Optional[str] = None
+    required_class: str
+    required_classes: Optional[List[str]] = None
+
+
+class SequenceStep(BaseModel):
+    order_index: int
+    label: str
+
+    # "region" (default): target = a user-drawn region on the reference
+    # frame. "detection_class": target = another detected class's OWN
+    # mask (e.g. use "M"'s predicted mask as the target, no drawn region).
+    # "multi_region": 2+ independently drawn regions (sub_targets) that
+    # must ALL match in the SAME frame — e.g. left hand on region A AND
+    # right hand on region B at once, which a single region can't express.
+    target_type: str = "region"
+
+    # Required when target_type == "region".
+    # "box"/"line": a flat [x1, y1, x2, y2]. "polygon" (a class boundary
+    # frozen once via /sequences/freeze-class): a list of [x, y] points —
+    # so this accepts either shape.
+    region_type: Optional[str] = None  # "box" | "line" | "polygon"
+    region_coords: Optional[Union[List[float], List[List[float]]]] = None
+
+    # Only meaningful when region_type == "line". "crossing" (default):
+    # the object's path must cross the line between frames. "overlap":
+    # matched the same way a box is — object's box/mask overlap % against
+    # the sequence's shared overlap_threshold, no motion needed.
+    trigger_mode: Optional[str] = None
+
+    # What overlap_threshold is measured as a fraction OF.
+    # "region" (default): Intersection / DRAWN REGION area — "how much of
+    # the region is covered". A region drawn much bigger than the object
+    # can never score high on this, however squarely the object sits in it.
+    # "object": Intersection / DETECTED OBJECT area — "how much of the
+    # object is inside the region", which is what "my hand is in the box"
+    # intuitively means; an object fully inside scores 100% regardless of
+    # how much empty space the region has around it.
+    overlap_basis: Optional[str] = None
+
+    # Required when target_type == "detection_class" — the class whose
+    # own detected mask becomes this step's target area.
+    target_class: Optional[str] = None
+
+    # Required when target_type == "multi_region" — one entry per region
+    # that must simultaneously match for this step to pass.
+    sub_targets: Optional[List[SequenceSubTarget]] = None
+
+    # Kept for backward compatibility with sequences saved before
+    # required_classes existed — treated as required_classes[0] if that
+    # list is absent. Not used (and not required) when target_type ==
+    # "multi_region" — each sub_target has its own required_class(es).
+    required_class: Optional[str] = None
+    # If set (2+ entries), ALL of these classes must have a detection
+    # overlapping the target in the SAME frame for the step to pass —
+    # e.g. ["hand", "m"] to require a finger AND the letter "m" both
+    # present at once. A single-entry list behaves the same as the old
+    # required_class-only steps.
+    required_classes: Optional[List[str]] = None
+
+    # How this step decides it's done. "detect" (default): passes the
+    # instant the match condition is true. "detect_hold": must stay true
+    # for hold_seconds in a row (a real press, not a pass-through).
+    # "undetect_hold": must stay ABSENT for hold_seconds in a row (the
+    # gesture/finger has been withdrawn).
+    complete_on: Optional[str] = None
+    hold_seconds: Optional[float] = None
+    # Sampled-frame count sequence_run.py converts hold_seconds into at
+    # run time — not user-set, but round-tripped so an already-converted
+    # step (e.g. re-saved from an export) isn't silently reset.
+    hold_frames: Optional[int] = None
+
+
+class RegionSequenceCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    mode: str = Field(default="strict")  # "strict" | "lenient"
+    overlap_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    steps: List[SequenceStep] = Field(default_factory=list)
+    # Dimensions of the reference frame regions were drawn against — used
+    # at run time to detect a landscape/portrait mismatch vs the video.
+    ref_image_width: Optional[int] = None
+    ref_image_height: Optional[int] = None
+
+
+class RegionSequenceUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    mode: Optional[str] = None
+    overlap_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    steps: Optional[List[SequenceStep]] = None
+    ref_image_width: Optional[int] = None
+    ref_image_height: Optional[int] = None
+
+
+class RegionSequenceResponse(BaseModel):
+    id: str
+    project_id: str
+    name: str
+    mode: str
+    overlap_threshold: float
+    steps: List[SequenceStep]
+    ref_image_width: Optional[int] = None
+    ref_image_height: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Single-image quick test (no save, no video needed) ────────────
+class SequenceTestImageRequest(BaseModel):
+    image_id: str
+    steps: List[SequenceStep] = Field(..., min_length=1)
+    overlap_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class SequenceTestClassResult(BaseModel):
+    class_name: str
+    matched: bool
+    best_overlap: float
+
+
+class SequenceTestStepResult(BaseModel):
+    order_index: int
+    label: str
+    region_type: str
+    testable: bool  # False for line regions — no motion history in a single still image
+    passed: Optional[bool] = None
+    per_class: List[SequenceTestClassResult] = Field(default_factory=list)
+    note: Optional[str] = None
+
+
+class SequenceTestImageResponse(BaseModel):
+    image_id: str
+    results: List[SequenceTestStepResult]
+
+
+# ── Sequence run schemas ──────────────────────────────────────────
+class SequenceRunStepEvent(BaseModel):
+    step_index: int
+    label: str
+    frame_number: int
+    matched: bool
+    reason: str
+    # Annotated snapshot of the frame at this event (detections + the
+    # step's region drawn on it) — lets you SEE what the model saw,
+    # not just read a pass/fail log. Absent if the snapshot failed to save.
+    frame_url: Optional[str] = None
+
+
+class SequenceRunResponse(BaseModel):
+    id: str
+    sequence_id: str
+    video_id: str
+    status: str
+    current_step: int
+    total_steps: int
+    passed: bool
+    step_events: List[SequenceRunStepEvent]
+    error: Optional[str]
+    # Overwritten continuously while status == "running" — poll this for a
+    # near-live view of what the model is currently seeing in the video.
+    latest_frame_url: Optional[str] = None
+    latest_frame_number: Optional[int] = None
+    created_at: datetime
+    finished_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
